@@ -107,3 +107,70 @@ function speakText() {
     body: JSON.stringify({ 'text': text }),
   })
 }
+
+// Handle file selection
+let selectedFile = null;
+
+function handleFileSelect() {
+  const fileInput = document.getElementById('file-input');
+  const fileLabel = document.getElementById('file-label');
+  const uploadButton = document.getElementById('upload-button');
+  
+  if (fileInput.files.length > 0) {
+    selectedFile = fileInput.files[0];
+    fileLabel.textContent = selectedFile.name;
+    uploadButton.disabled = false;
+  } else {
+    selectedFile = null;
+    fileLabel.textContent = 'Upload MP3 file...';
+    uploadButton.disabled = true;
+  }
+}
+
+// Upload file
+function uploadFile() {
+  if (!selectedFile) {
+    console.error('No file selected');
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  
+  const uploadButton = document.getElementById('upload-button');
+  const msgLabel = document.getElementById('msg-label');
+  
+  // Disable button during upload
+  uploadButton.disabled = true;
+  msgLabel.textContent = 'Uploading...';
+  msgLabel.style.color = '#a3a3a3';
+  
+  fetch('/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log(data);
+    if (data.status === 'success') {
+      msgLabel.textContent = '✓ ' + data.message;
+      msgLabel.style.color = '#14b8a6'; // teal
+      // Reset form
+      document.getElementById('file-input').value = '';
+      document.getElementById('file-label').textContent = 'Upload MP3 file...';
+      selectedFile = null;
+      // Reload page after 2 seconds to show new file
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      msgLabel.textContent = '✗ ' + data.message;
+      msgLabel.style.color = '#ef4444'; // red
+      uploadButton.disabled = false;
+    }
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+    msgLabel.textContent = '✗ Upload failed';
+    msgLabel.style.color = '#ef4444';
+    uploadButton.disabled = false;
+  });
+}

@@ -9,10 +9,12 @@ from pygame import mixer, base
 from mutagen.mp3 import MP3
 from mutagen._util import MutagenError
 from typing import Union
+from werkzeug.utils import secure_filename
 from helpers.svg import svg
 from helpers.config import set_config 
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 with app.app_context():
     config = set_config()
@@ -116,5 +118,44 @@ def speak_text():
         return jsonify({'status': 'speaking', 'text': text})
     return jsonify({'status': 'error', 'message': 'No text provided'}), 400
 
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # Check if file is in the request
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file provided'}), 400
+    
+    file = request.files['file']
+    
+    # Check if user selected a file
+    if not file.filename or file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+    
+    # Check file extension
+    if not file.filename.lower().endswith('.mp3'):
+        return jsonify({'status': 'error', 'message': 'Only MP3 files are allowed'}), 400
+    
+    # Secure the filename to prevent directory traversal attacks
+    filename = secure_filename(file.filename or '')
+    filepath = os.path.join(sound_dir, filename)
+    
+    # Check if file already exists
+    if os.path.exists(filepath):
+        return jsonify({'status': 'error', 'message': 'File already exists'}), 409
+    
+    try:
+        # Save the file temporarily
+        file.save(filepath)
+        
+        # Validate it's a real mp3 file
+        if not is_mp3(filepath):
+            os.remove(filepath)  # Delete invalid file
+            return jsonify({'status': 'error', 'message': 'Invalid MP3 file'}), 400
+        
+        return jsonify({'status': 'success', 'message': f'File {filename} uploaded successfully', 'filename': filename})
+    except Exception as e:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({'status': 'error', 'message': f'Upload failed: {str(e)}'}), 500
+
 if __name__ == '__main__':
-    app.run(port=config['app']['port'], host=config['app']['host'])
+    app.run(port=config['app']['port'], host=config['app']['host'], debug=True)
